@@ -1,37 +1,90 @@
 # BigDataFlink
-Анализ больших данных - лабораторная работа №3 - Streaming processing с помощью Flink
 
-Одним из самых популярных фреймворков для работы со streaming processing является Apache Flink. Apache Flink - мощный фреймворк, который предлагает широкий набор функциональности для простого написания streaming processing.
+Лабораторная работа №3 по курсу "Анализ больших данных": streaming processing с помощью Apache Flink.
 
-Что необходимо сделать? 
+Проект реализует поток:
 
-Необходимо реализовать потоковую обработку данных с помощью Flink, который читает топик Kafka, трансформирует данные в режиме streaming в модель звезда и пишет результат в PostgreSQL. Данные в Kafka-топиках хранятся в формате json. Данные в топик kafka нужно отправлять самостоятельно, эмулируя источник данных.
+1. CSV файлы (`mock_data/*.csv`) -> JSON сообщения в Kafka.
+2. Flink job читает Kafka topic в streaming-режиме.
+3. Данные преобразуются в звездную схему.
+4. Результат пишется в PostgreSQL.
 
-Какие данные отправляются в Kafka?
- - Каждое сообщение в Kafka-топике - это строчка из csv файлов, преобразованная в формат json.
+## Состав проекта
 
-Какие данные отправляются в PostgreSQL?
- - Трансформированные данные в модель данных звезда.
+- `mock_data/*.csv` - 10 файлов, по 1000 строк каждый.
+- `app/csv_to_kafka_job.py` - отправка строк CSV в Kafka как JSON.
+- `app/kafka_to_postgres_job.py` - Flink streaming job (Kafka -> PostgreSQL, star schema).
+- `docker-compose.yml` - PostgreSQL + Kafka + Flink + автозапуск CSV producer.
+- `Dockerfile` - образ Flink с Python-зависимостями и JDBC/Kafka коннекторами.
 
-![Лабораторная работа №3](https://github.com/user-attachments/assets/d3c1544d-3fe6-4c15-b673-9aa5d27dbd76)
+## Что разворачивается через Docker Compose
 
+- `db` - PostgreSQL 15.
+- `kafka` - Apache Kafka.
+- `kafka-init` - создание топика `mock_data_topic`.
+- `jobmanager`, `taskmanager` - кластер Flink.
+- `csv-producer` - одноразовый запуск приложения, отправляющего данные из `mock_data/*.csv` в Kafka.
 
-Алгоритм:
+## Быстрый запуск
 
-1. Клонируете к себе этот репозиторий.
-2. Устанавливаете инструмент для работы с запросами SQL (рекомендую DBeaver).
-3. Устанавливаете базу данных PostgreSQL (рекомендую установку через docker).
-4. Устанавливаете Apache Flink (рекомендую установку через Docker).
-5. Устанавливаете Apache Kafka (рекомендую установку через Docker).
-6. Скачиваете файлы с исходными данными mock_data( * ).csv, где ( * ) номера файлов. Всего 10 файлов, каждый по 1000 строк.
-7. Реализуете приложение, которое каждую строчку из исходных csv-файлов преобразует в json и отправляет в виде сообщения в Kafka-топик.
-8. Реализуете приложение на Flink, которое читает Kafka-топик, преобразует данные в модель звезда и сохраняет в PostgreSQL в режиме streaming.
-9. Проверяете конечные данные в PostgreSQL.
-10. Отправляете работу на проверку лаборантам.
+Из корня проекта:
 
-Что должно быть результатом работы?
+```bash
+docker compose up -d --build
+```
 
-1. Репозиторий, в котором есть исходные данные mock_data().csv, где () номера файлов. Всего 10 файлов, каждый по 1000 строк.
-2. Файл docker-compose.yml с установкой PostgreSQL, Flink, Kafka и запуском приложения, которое из файлов mock_data(*).csv создает сообщения json в Kafka.
-3. Инструкция, как запускать Flink-джобу и приложение для отправки данных в Kafka для проверки лабораторной работы.
-4. Код Apache Flink для трансформации данных в режиме streaming.
+Проверить, что producer отработал (должно быть сообщение про количество отправленных строк):
+
+```bash
+docker compose logs csv-producer
+```
+
+## Запуск Flink job
+
+После запуска инфраструктуры отправьте job в Flink:
+
+```bash
+docker compose exec jobmanager flink run -py /opt/flink/app/kafka_to_postgres_job.py
+```
+
+Открыть Web UI Flink:
+
+- [http://localhost:8081](http://localhost:8081)
+
+## Проверка результата в PostgreSQL
+
+Подключение:
+
+- Host: `localhost`
+- Port: `5432`
+- DB: `BigData`
+- User: `postgres`
+- Password: `mysecretpassword`
+
+Проверочные запросы:
+
+```sql
+SELECT COUNT(*) FROM dim_genders;
+SELECT COUNT(*) FROM dim_networks;
+SELECT COUNT(*) FROM dim_sources;
+SELECT COUNT(*) FROM dim_persons;
+SELECT COUNT(*) FROM fact_events;
+```
+
+Пример просмотра данных:
+
+```sql
+SELECT * FROM fact_events LIMIT 20;
+```
+
+## Остановка
+
+```bash
+docker compose down
+```
+
+Полная очистка тома Postgres:
+
+```bash
+docker compose down -v
+```
