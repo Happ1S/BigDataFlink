@@ -64,17 +64,26 @@ docker compose exec jobmanager flink run -py /opt/flink/app/kafka_to_postgres_jo
 Проверочные запросы:
 
 ```sql
-SELECT COUNT(*) FROM dim_genders;
-SELECT COUNT(*) FROM dim_networks;
-SELECT COUNT(*) FROM dim_sources;
-SELECT COUNT(*) FROM dim_persons;
-SELECT COUNT(*) FROM fact_events;
+SELECT COUNT(*) FROM dim_customers;
+SELECT COUNT(*) FROM dim_products;
+SELECT COUNT(*) FROM dim_stores;
+SELECT COUNT(*) FROM dim_pets;
+SELECT COUNT(*) FROM fact_sales;
 ```
+
+После запуска Flink job ожидается до `10000` строк в `fact_sales` (по одной на каждое сообщение из Kafka).
 
 Пример просмотра данных:
 
 ```sql
-SELECT * FROM fact_events LIMIT 20;
+SELECT * FROM fact_sales LIMIT 20;
+
+SELECT f.*, c.customer_first_name, p.product_category, s.store_city
+FROM fact_sales f
+JOIN dim_customers c ON c.customer_email = f.customer_email
+JOIN dim_products p ON p.product_name = f.product_name
+JOIN dim_stores s ON s.store_email = f.store_email
+LIMIT 10;
 ```
 
 ## Остановка
